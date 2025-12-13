@@ -1,0 +1,12 @@
+[project]
+name = "quanta-flow"
+version = "0.1.0"
+description = "QuantaFlow — quantized sliding-window fairness for API rate limits"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pytest",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

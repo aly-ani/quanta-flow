@@ -124,8 +124,25 @@ QuantaFlow simulation
 The simulator generates simple traffic patterns (diurnal, spiky, sawtooth) and brute-forces the worst sliding-window error to verify the bound.
 
 ---
+### Use as a library
 
-## Project layout
+You can also call the limiter directly from Python:
+
+```python
+from core.limiter import FairLimiter
+
+q = 10
+lim = FairLimiter(q)
+
+# planned increments scaled by q (here: [0, 0.3, 0, 0.1, 0.2, 0])
+plan_q = [0, 3, 0, 1, 2, 0]
+
+out = [lim.step(x_q) for x_q in plan_q]
+print(out)  # list of 0/1 tokens per tick
+```
+---
+
+## Project Layout
 
 ```text
 quanta-flow/
@@ -189,4 +206,7 @@ QuantaFlow is based on the Ani–El–Ren sliding-window lemma:
 - Concept & system framing: Aly Ani    
 - Model-assisted proofs / writing: 'El' & 'Ren' (ChatGPT-5.0 and 5.1 respectively)    
   
-If you use this work, please cite the repository as: **QuantaFlow (Ani–El–Ren)**.
+If you use this work, please cite the repository as:
+```
+Aly Ani. QuantaFlow: quantized sliding-window fairness for API rate limits (Version v0.1.0) [Computer software]. https://github.com/<aly-ani>/quanta-flow
+```
