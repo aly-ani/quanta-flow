@@ -2,8 +2,8 @@ cff-version: 1.2.0
 title: "QuantaFlow: quantized sliding-window fairness for API rate limits"
 message: "If you use this software, please cite it."
 authors:
-  - family-names: "Ani"
-    given-names: "Aly"
+  - family-names: "Aly"
+    given-names: "T"
 abstract: "A tiny, deterministic limiter with a provable ≤(1−1/q) error in every sliding window; online O(1) carry-rule algorithm plus simulator and tests."
 license: Apache-2.0
 repository-code: "https://github.com/<aly-ani>/quanta-flow"
