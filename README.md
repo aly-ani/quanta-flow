@@ -13,47 +13,20 @@ $$
 
 That’s strictly tighter than the classic “≤ 1 token per window” folklore bound.
 
-
-**License**: Apache-2.0
-
----
-
-## Why?
-
-In a multi-tenant API, you often have:
-
-- per-tenant fractional budgets like 0.3 tokens per 100ms, and
-    
-- a rate limiter that must mint integer tokens each tick.
-    
-
-Naive rounding or float accumulation gives you:
-
-- good tenants get false-throttled in unlucky windows,
-    
-- abusive or noisy tenants can exploit sawtooth bursts,
-    
-- SLOs and billing envelopes are fuzzier than they look on paper.
-    
-
-QuantaFlow uses a simple carry rule on a 1/q lattice to keep every window close to the plan, online and with O(1) state per tenant.
-
 ---
 
 ## Core guarantee (Ani–El–Ren lemma)
 
-Assume each planned increment lies on a grid of step 1/q:
+Let planned fractional increments lie on a 1/q grid:  
+**xₜ ∈ {0, 1/q, 2/q, …, 1}** for each tick t.  
+The limiter emits integer tokens **yₜ ∈ {0,1}**.
 
-- x_t in {0, 1/q, 2/q, ..., 1}
-    
+Then for **every** contiguous window **W**,
+\[
+\Big|\sum_{t\in W} (x_t - y_t)\Big| \le 1 - \frac{1}{q}.
+\]
 
-Then there is an online, O(1)-state algorithm that outputs y_t in {0,1} such that for every window [s..t]:
-
-```
-| sum_{i = s..t} (x_i - y_i) | <= 1 - 1/q
-```
-
-and this constant is worst-case optimal. QuantaFlow implements that algorithm as a per-tenant mint loop.
+The constant \(1-\tfrac{1}{q}\) is worst-case optimal (tight witness and proof in [`math/math_proofs.md`](math/math_proofs.md))—strictly tighter than the classic “≤ 1 token per window” folklore bound for \(q\ge 2\).
 
 ---
 
@@ -100,9 +73,24 @@ Scaling to up to M tokens per tick is supported by looping the carry; the bound 
 
 ---
 
-## Usage
+## Why this matters
 
-### Run the simulator
+In multi-tenant APIs you plan fractional budgets (e.g., 0.3 / 100 ms) but must mint integer tokens each tick. Naive float accumulation or rounding causes:
+- unlucky tenants to get false-throttled in bad windows,
+- bursty/noisy tenants to exploit sawtooth artifacts,
+- fuzzier SLOs/billing than your spec implies.
+
+QuantaFlow’s carry rule on a 1/q lattice keeps every sliding window close to the plan—online, with **O(1)** state per tenant.
+
+---
+
+## Install / Quickstart
+
+```bash
+git clone <repo-url> && cd quanta-flow
+pip install -e .
+pytest -q
+python -m sim.run_sim --q 10 --ticks 200 --scenario diurnal --amp 0.3 --seed 7
 
 From the project root:
 
@@ -124,6 +112,7 @@ QuantaFlow simulation
 The simulator generates simple traffic patterns (diurnal, spiky, sawtooth) and brute-forces the worst sliding-window error to verify the bound.
 
 ---
+
 ### Use as a library
 
 You can also call the limiter directly from Python:
@@ -175,7 +164,6 @@ We use simple property tests to sanity-check the implementation:
     
 - a basic multi-token extension respects the scaled bound M * (1 - 1/q).
     
-
 From PyCharm you can run `tests/test_properties.py` directly; or from the terminal:
 
 ```bash
@@ -186,16 +174,8 @@ pytest tests/test_properties.py
 
 ## Status
 
-This is a reference implementation and learning artifact, not production advice.
-
-The core algorithm and bound (the Ani–El–Ren lemma) are math-level solid; real systems would want:
-
-- more extensive fuzzing on realistic traces,
-    
-- integration into an existing rate-limit service,
-    
-- capacity-coupling logic when global mint capacity is tight.
-    
+Reference implementation / learning artifact, not production advice.
+For deployment you’ll likely want: more fuzzing on real traces, integration with your rate-limit service, and capacity-coupling logic for global mint constraints.  
 
 ---
 
@@ -210,3 +190,4 @@ If you use this work, please cite the repository as:
 ```
 Aly Ani. QuantaFlow: quantized sliding-window fairness for API rate limits (Version v0.1.0) [Computer software]. https://github.com/<aly-ani>/quanta-flow
 ```
+**License:** Apache-2.0
