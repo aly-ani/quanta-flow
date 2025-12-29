@@ -12,6 +12,12 @@ $$
 $$
 
 That’s strictly tighter than the classic “≤ 1 token per window” folklore bound.
+---
+## Why this matters
+
+Token Bucket: per-window drift can spike to >1 token; Leaky Bucket: smoother but window error is opaque.  
+**QuantaFlow:** on a 1/q lattice, every contiguous window’s drift is $$≤ 1−\tfrac{1}{q}$$
+(tight) → Predictable SLOs, O(1) state.
 
 ---
 
@@ -91,6 +97,7 @@ git clone <repo-url> && cd quanta-flow
 pip install -e .
 pytest -q
 python -m sim.run_sim --q 10 --ticks 200 --scenario diurnal --amp 0.3 --seed 7
+```
 
 From the project root:
 
@@ -184,7 +191,7 @@ For deployment you’ll likely want: more fuzzing on real traces, integration wi
 QuantaFlow is based on the Ani–El–Ren sliding-window lemma:  
   
 - Concept & system framing: Aly Ani    
-- Model-assisted proofs / writing: 'El' & 'Ren' (ChatGPT-5.0 and 5.1 respectively)    
+- Model-assisted proofs / writing & validation: 'El' & 'Ren' (ChatGPT-5.0 and Opus 4.5 respectively)    
   
 If you use this work, please cite the repository as:
 ```
