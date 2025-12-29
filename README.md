@@ -2,6 +2,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](#)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](#)
+[![CI](https://github.com/aly-ani/quanta-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/aly-ani/quanta-flow/actions/workflows/ci.yml)
+
 
 QuantaFlow is a tiny, deterministic limiter with a provable bound on how far actual behavior can drift from a fractional plan in any contiguous time window.
 
@@ -12,12 +14,29 @@ $$
 $$
 
 That’s strictly tighter than the classic “≤ 1 token per window” folklore bound.
+
 ---
 ## Why this matters
 
 Token Bucket: per-window drift can spike to >1 token; Leaky Bucket: smoother but window error is opaque.  
 **QuantaFlow:** on a 1/q lattice, every contiguous window’s drift is $$≤ 1−\tfrac{1}{q}$$
 (tight) → Predictable SLOs, O(1) state.
+
+**Why QuantaFlow beats Token/Leaky Bucket (in one breath)**  
+• Token Bucket: worst-case per-window drift can exceed 1 token; hard to bound for arbitrary windows.  
+• Leaky Bucket: smoother, but the window error is opaque and depends on leak rate vs. plan.  
+• QuantaFlow: on a 1/q lattice, every contiguous window’s drift is ≤ 1 − 1/q, and that bound is tight.  
+• One-sentence proof sketch: maintain E ∈ [0,q−1] as the integer leftover; cumulative drift R_t = Σ(x_t−y_t) satisfies the invariant **R_t = E_t / q**, so |R_t| ≤ (q−1)/q.  
+• Tight witness: choose q−1 ticks of x_q=1 (i.e., x=1/q) then 0; just before an emission, E=q−1 ⇒ drift=(q−1)/q.  
+• Result: predictable SLOs with O(1) state and no float drift.
+
+### Comparison
+
+| Scheme        | Worst-case drift bound (any window) | State per tenant | Burst handling         | Determinism |
+|---------------|-------------------------------------|------------------|------------------------|-------------|
+| Token Bucket  | Not globally bounded (depends on burst & window alignment) | tokens, last-refill | Allows bursts up to bucket size; window error can spike | Yes |
+| Leaky Bucket  | Opaque; depends on leak vs. arrivals | queue/level      | Smooths bursts; error hard to reason about | Yes |
+| **QuantaFlow**| **≤ 1 − 1/q (tight)**               | **E ∈ [0, q−1]** | Emits at carry; windows stay close to plan | **Yes** |
 
 ---
 
@@ -99,23 +118,6 @@ pytest -q
 python -m sim.run_sim --q 10 --ticks 200 --scenario diurnal --amp 0.3 --seed 7
 ```
 
-From the project root:
-
-```bash
-python -m sim.run_sim --q 10 --ticks 200 --scenario diurnal --amp 0.3 --seed 7
-```
-
-Example output:
-
-```text
-QuantaFlow simulation
-  q           = 10
-  ticks       = 200
-  scenario    = diurnal
-  max window error = 0.900000
-  theory bound     = 0.900000
-```
-
 The simulator generates simple traffic patterns (diurnal, spiky, sawtooth) and brute-forces the worst sliding-window error to verify the bound.
 
 ---
@@ -130,7 +132,7 @@ from core.limiter import FairLimiter
 q = 10
 lim = FairLimiter(q)
 
-# planned increments scaled by q (here: [0, 0.3, 0, 0.1, 0.2, 0])
+# planned increments scaled by q (ints, here: [0,3,0,1,2,0])
 plan_q = [0, 3, 0, 1, 2, 0]
 
 out = [lim.step(x_q) for x_q in plan_q]
