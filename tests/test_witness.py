@@ -1,25 +1,22 @@
-# tests/test_witness.py
 from core.limiter import FairLimiter
+from itertools import accumulate
 
-def worst_window_error(q=10, reps=50):
-    # adversarial pattern: push q-1 remainders just below carry, then trigger
-    plan = ([q-1] * (q-1) + [1]) * reps  # scaled by q
-    lim = FairLimiter(q)
-    out = []
-    E = 0
-    for xq in plan:
-        out.append(lim.step(xq))
-    # brute force worst absolute prefix/window error
-    errs = []
-    prefix_x = prefix_y = 0
-    sx = [0]; sy = [0]
-    for xq in plan: sx.append(sx[-1] + xq/q)
-    for y in out:   sy.append(sy[-1] + y)
-    for i in range(len(plan)+1):
-        for j in range(i):
-            errs.append(abs((sx[i]-sx[j]) - (sy[i]-sy[j])))
-    return max(errs)
+def max_window_error(x_q, y, q):
+    n = len(x_q)
+    X = [0.0] + list(accumulate([v / q for v in x_q]))
+    Y = [0.0] + list(accumulate(y))
+    ans = 0.0
+    for i in range(n):
+        for j in range(i+1, n+1):
+            err = abs((X[j]-X[i]) - (Y[j]-Y[i]))
+            if err > ans: ans = err
+    return ans
 
-def test_bound_tight():
+def test_random_sequences_respect_bound():
+    import random
     q = 10
-    assert abs(worst_window_error(q) - (1 - 1/q)) < 1e-6
+    for _ in range(5):
+        lim = FairLimiter(q)
+        x_q = [random.randint(0, q) for _ in range(200)]
+        y = [lim.step(x) for x in x_q]
+        assert max_window_error(x_q, y, q) <= (1 - 1/q) + 1e-9
