@@ -144,23 +144,27 @@ print(out)  # list of 0/1 tokens per tick
 
 ```text
 quanta-flow/
-  core/
-    __init__.py
-    limiter.py          # carry-rule engine
-  sim/
-    __init__.py
-    run_sim.py          # CLI simulator
-  tests/
-    __init__.py
-    test_properties.py  # property tests
-  math/
-    math_proofs.md      # Ani–El–Ren lemma & theorem
-  README.md
-  LICENSE
-  CITATION.cff
-  pyproject.toml
+├─ core/
+│  ├─ __init__.py
+│  └─ limiter.py          # carry-rule engine
+├─ sim/
+│  ├─ __init__.py
+│  └─ run_sim.py          # CLI simulator
+├─ examples/
+│  └─ minimal.py          # 10-line demo loop
+├─ tests/
+│  ├─ __init__.py
+│  ├─ test_properties.py  # property tests + bound checks
+│  └─ test_witness.py     # tight witness hits (1−1/q)
+├─ math/
+│  ├─ __init__.py
+│  └─ math_proofs.md      # Ani–El–Ren lemma & theorem
+├─ README.md
+├─ LICENSE
+├─ CITATION.cff
+└─ pyproject.toml
 ```
-
+Components at a glance: **core** = limiter, **sim** = CLI to brute-force worst windows, **examples** = minimal usage, **tests** = properties + tight-witness, **math** = proofs.
 ---
 
 ## Tests
