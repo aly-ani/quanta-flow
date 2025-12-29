@@ -1,18 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "quanta-flow"
 version = "0.1.0"
-description = "QuantaFlow — quantized sliding-window fairness for API rate limits"
+description = "Quantized sliding-window fairness for API rate limits"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
-authors = [{ name = "Aly Ani", email = "aly.safety@proton.me" }]
-keywords = ["python", "rate-limit", "algorithms", "fairness"]
-dependencies = ["pytest"]
-
-[project.urls]
-Homepage = "https://github.com/aly-ani/quanta-flow"
-Repository = "https://github.com/aly-ani/quanta-flow.git"
-Issues = "https://github.com/aly-ani/quanta-flow/issues"
+license = "Apache-2.0"
+authors = [{ name = "Ani" }]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "sim*", "math*"]
