@@ -165,6 +165,7 @@ quanta-flow/
 └─ pyproject.toml
 ```
 Components at a glance: **core** = limiter, **sim** = CLI to brute-force worst windows, **examples** = minimal usage, **tests** = properties + tight-witness, **math** = proofs.
+
 ---
 
 ## Tests
