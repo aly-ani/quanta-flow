@@ -16,7 +16,7 @@ $$
 That’s strictly tighter than the classic “≤ 1 token per window” folklore bound.
 
 ---
-## Why this matters
+## How QuantaFlow compares
 
 Token Bucket: per-window drift can spike to >1 token; Leaky Bucket: smoother but window error is opaque.  
 **QuantaFlow:** on a 1/q lattice, every contiguous window’s drift is $$≤ 1−\tfrac{1}{q}$$
