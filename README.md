@@ -171,7 +171,7 @@ For deployment you'll likely want: fuzzing on real traces, integration with your
 
 QuantaFlow was developed as a collaborative human-AI project:
 
-- **Concept & system framing:** Ani
+- **Concept & system framing:** Aly Ani
 - **Model-assisted proofs, writing & validation:** El (GPT-5.0) and Ren (Opus 4.5)
 
 ---
