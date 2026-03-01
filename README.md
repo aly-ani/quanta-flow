@@ -1,67 +1,42 @@
-# QuantaFlow — quantized sliding-window fairness for API rate limits
+# QuantaFlow
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](#)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](#)
-[![CI](https://github.com/aly-ani/quanta-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/aly-ani/quanta-flow/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)]()
 
+QuantaFlow is a tiny, deterministic rate limiter with a formal proof of how far actual behavior can drift from a fractional plan in any contiguous time window.
 
-QuantaFlow is a tiny, deterministic limiter with a provable bound on how far actual behavior can drift from a fractional plan in any contiguous time window.
+If you plan on a 1/q grid (for example, tenths per tick), QuantaFlow guarantees that for every sliding window W:
 
-If you plan on a 1/q grid (for example, tenths per tick), QuantaFlow guarantees that for every sliding window \(W\),
+$$\left|\sum_{t \in W} (x_t - y_t)\right| \le 1 - \frac{1}{q}$$
 
-$$
-\left|\sum_{t \in W} (x_t - y_t)\right| \le 1 - \frac{1}{q}.
-$$
-
-That’s strictly tighter than the classic “≤ 1 token per window” folklore bound.
-
----
-## How QuantaFlow compares
-
-Token Bucket: per-window drift can spike to >1 token; Leaky Bucket: smoother but window error is opaque.  
-**QuantaFlow:** on a 1/q lattice, every contiguous window’s drift is $$≤ 1−\tfrac{1}{q}$$
-(tight) → Predictable SLOs, O(1) state.
-
-**Why QuantaFlow beats Token/Leaky Bucket (in one breath)**  
-• Token Bucket: worst-case per-window drift can exceed 1 token; hard to bound for arbitrary windows.  
-• Leaky Bucket: smoother, but the window error is opaque and depends on leak rate vs. plan.  
-• QuantaFlow: on a 1/q lattice, every contiguous window’s drift is ≤ 1 − 1/q, and that bound is tight.  
-• One-sentence proof sketch: maintain E ∈ [0,q−1] as the integer leftover; cumulative drift R_t = Σ(x_t−y_t) satisfies the invariant **R_t = E_t / q**, so |R_t| ≤ (q−1)/q.  
-• Tight witness: choose q−1 ticks of x_q=1 (i.e., x=1/q) then 0; just before an emission, E=q−1 ⇒ drift=(q−1)/q.  
-• Result: predictable SLOs with O(1) state and no float drift.
-
-### Comparison
-
-| Scheme        | Worst-case drift bound (any window) | State per tenant | Burst handling         | Determinism |
-|---------------|-------------------------------------|------------------|------------------------|-------------|
-| Token Bucket  | Not globally bounded (depends on burst & window alignment) | tokens, last-refill | Allows bursts up to bucket size; window error can spike | Yes |
-| Leaky Bucket  | Opaque; depends on leak vs. arrivals | queue/level      | Smooths bursts; error hard to reason about | Yes |
-| **QuantaFlow**| **≤ 1 − 1/q (tight)**               | **E ∈ [0, q−1]** | Emits at carry; windows stay close to plan | **Yes** |
+This bound is tight (a witness sequence achieves it exactly).
 
 ---
 
-## Core guarantee (Ani–El–Ren lemma)
+## Why this matters
 
-Let planned fractional increments lie on a 1/q grid:  
-**xₜ ∈ {0, 1/q, 2/q, …, 1}** for each tick t.  
-The limiter emits integer tokens **yₜ ∈ {0,1}**.
+In multi-tenant APIs you plan fractional budgets (e.g., 0.3 requests / 100ms) but must emit integer tokens each tick. Naive float accumulation or rounding causes:
 
-Then for **every** contiguous window **W**,
-\[
-\Big|\sum_{t\in W} (x_t - y_t)\Big| \le 1 - \frac{1}{q}.
-\]
+- **Unlucky tenants** to get false-throttled in bad windows
+- **Bursty tenants** to exploit sawtooth artifacts
+- **Fuzzier SLOs/billing** than your spec implies
 
-The constant \(1-\tfrac{1}{q}\) is worst-case optimal (tight witness and proof in [`math/math_proofs.md`](math/math_proofs.md))—strictly tighter than the classic “≤ 1 token per window” folklore bound for \(q\ge 2\).
+QuantaFlow's carry rule keeps every sliding window close to the plan — online, with O(1) state per tenant.
 
 ---
 
-## The carry-rule algorithm (fixed-point)
+## How it works
+
+The core algorithm is a Bresenham-style integer accumulator applied to rate limiting. The technique dates to [Bresenham (1962)](https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm) for line rasterization, and the underlying math connects to [Sturmian sequences](https://en.wikipedia.org/wiki/Sturmian_word) and [balanced words](https://en.wikipedia.org/wiki/Beatty_sequence) in combinatorics on words.
+
+**What QuantaFlow contributes:** a clean formalization of this bound for the sliding-window rate-limiting domain, a formal proof with tight witness, a reference implementation, and a direct comparison against token bucket / leaky bucket approaches.
+
+### The carry-rule algorithm (fixed-point)
 
 We work in integers by scaling everything by q.
 
 ```python
 # core/limiter.py
-
 class FairLimiter:
     def __init__(self, q: int):
         assert q >= 2
@@ -80,32 +55,40 @@ class FairLimiter:
         return 0
 ```
 
-State per tenant:
+**State per tenant:** one integer E ∈ [0, q−1].
 
-- E = leftover in [0, q-1].
-    
-
-On each tick:
-
+**On each tick:**
 1. Add the planned increment (scaled by q) to E.
-    
-2. If E >= q, emit one token and subtract q.
-    
+2. If E ≥ q, emit one token and subtract q.
 3. Otherwise, emit zero.
-    
 
-Scaling to up to M tokens per tick is supported by looping the carry; the bound becomes M * (1 - 1/q).
+Scaling to up to M tokens per tick is supported by looping the carry; the bound becomes M × (1 − 1/q).
 
 ---
 
-## Why this matters
+## Sliding-window bound
 
-In multi-tenant APIs you plan fractional budgets (e.g., 0.3 / 100 ms) but must mint integer tokens each tick. Naive float accumulation or rounding causes:
-- unlucky tenants to get false-throttled in bad windows,
-- bursty/noisy tenants to exploit sawtooth artifacts,
-- fuzzier SLOs/billing than your spec implies.
+**Claim.** Let planned fractional increments lie on a 1/q grid: xₜ ∈ {0, 1/q, 2/q, …, 1} for each tick t. The limiter emits integer tokens yₜ ∈ {0, 1}. Then for every contiguous window W:
 
-QuantaFlow’s carry rule on a 1/q lattice keeps every sliding window close to the plan—online, with **O(1)** state per tenant.
+$$\left|\sum_{t \in W} (x_t - y_t)\right| \le 1 - \frac{1}{q}$$
+
+**Proof sketch.** The error accumulator E takes values in {0, 1, 2, …, q−1}. The cumulative drift Rₜ = Σ(xₜ − yₜ) satisfies Rₜ = Eₜ/q, so |Rₜ| ≤ (q−1)/q.
+
+**Tight witness.** Choose q−1 ticks of x_q = 1 (i.e., x = 1/q) then 0. Just before an emission, E = q−1, so drift = (q−1)/q.
+
+Full proof in `math/math_proofs.md`.
+
+**Note on prior art:** The (1 − 1/q) bound follows from elementary properties of modular arithmetic on a finite grid and is implicit in the classical theory of balanced words and Christoffel words (see Berthé & Tijdeman, 2002; Berstel et al., 2008). The contribution here is the explicit formalization for rate-limiting with a reference implementation, not the bound itself.
+
+---
+
+## Comparison
+
+| Scheme | Worst-case drift bound (any window) | State per tenant | Burst handling | Determinism |
+|---|---|---|---|---|
+| Token Bucket | Not globally bounded (depends on burst & window alignment) | tokens, last-refill | Allows bursts up to bucket size; window error can spike | Yes |
+| Leaky Bucket | Opaque; depends on leak vs. arrivals | queue/level | Smooths bursts; error hard to reason about | Yes |
+| QuantaFlow | ≤ 1 − 1/q (tight) | E ∈ [0, q−1] | Emits at carry; windows stay close to plan | Yes |
 
 ---
 
@@ -120,11 +103,7 @@ python -m sim.run_sim --q 10 --ticks 200 --scenario diurnal --amp 0.3 --seed 7
 
 The simulator generates simple traffic patterns (diurnal, spiky, sawtooth) and brute-forces the worst sliding-window error to verify the bound.
 
----
-
-### Use as a library
-
-You can also call the limiter directly from Python:
+## Use as a library
 
 ```python
 from core.limiter import FairLimiter
@@ -134,10 +113,10 @@ lim = FairLimiter(q)
 
 # planned increments scaled by q (ints, here: [0,3,0,1,2,0])
 plan_q = [0, 3, 0, 1, 2, 0]
-
 out = [lim.step(x_q) for x_q in plan_q]
 print(out)  # list of 0/1 tokens per tick
 ```
+
 ---
 
 ## Project Layout
@@ -149,36 +128,30 @@ quanta-flow/
 │  └─ limiter.py          # carry-rule engine
 ├─ sim/
 │  ├─ __init__.py
-│  └─ run_sim.py          # CLI simulator
+│  └─ run_sim.py           # CLI simulator
 ├─ examples/
-│  └─ minimal.py          # 10-line demo loop
+│  └─ minimal.py           # 10-line demo loop
 ├─ tests/
 │  ├─ __init__.py
-│  ├─ test_properties.py  # property tests + bound checks
-│  └─ test_witness.py     # tight witness hits (1−1/q)
+│  ├─ test_properties.py   # property tests + bound checks
+│  └─ test_witness.py      # tight witness hits (1−1/q)
 ├─ math/
 │  ├─ __init__.py
-│  └─ math_proofs.md      # Ani–El–Ren lemma & theorem
+│  └─ math_proofs.md       # bound proof & tight witness
 ├─ README.md
 ├─ LICENSE
 ├─ CITATION.cff
 └─ pyproject.toml
 ```
-Components at a glance: **core** = limiter, **sim** = CLI to brute-force worst windows, **examples** = minimal usage, **tests** = properties + tight-witness, **math** = proofs.
 
 ---
 
 ## Tests
 
-We use simple property tests to sanity-check the implementation:
-
-- random sequences on the 1/q grid never exceed the (1 - 1/q) bound (up to float slack),
-    
-- a tight witness sequence hits the bound exactly,
-    
-- a basic multi-token extension respects the scaled bound M * (1 - 1/q).
-    
-From PyCharm you can run `tests/test_properties.py` directly; or from the terminal:
+Property tests verify:
+- Random sequences on the 1/q grid never exceed the (1 − 1/q) bound
+- A tight witness sequence hits the bound exactly
+- Multi-token extension respects the scaled bound M × (1 − 1/q)
 
 ```bash
 pytest tests/test_properties.py
@@ -188,20 +161,29 @@ pytest tests/test_properties.py
 
 ## Status
 
-Reference implementation / learning artifact, not production advice.
-For deployment you’ll likely want: more fuzzing on real traces, integration with your rate-limit service, and capacity-coupling logic for global mint constraints.  
+Reference implementation and learning artifact, not production advice.
+
+For deployment you'll likely want: fuzzing on real traces, integration with your rate-limit service, and capacity-coupling logic for global mint constraints.
 
 ---
 
-## Credits  
-  
-QuantaFlow is based on the Ani–El–Ren sliding-window lemma:  
-  
-- Concept & system framing: Aly Ani    
-- Model-assisted proofs / writing & validation: 'El' & 'Ren' (ChatGPT-5.0 and Opus 4.5 respectively)    
-  
-If you use this work, please cite the repository as:
-```
-Aly Ani. QuantaFlow: quantized sliding-window fairness for API rate limits (Version v0.1.0) [Computer software]. https://github.com/<aly-ani>/quanta-flow
-```
-**License:** Apache-2.0
+## Credits
+
+QuantaFlow was developed as a collaborative human-AI project:
+
+- **Concept & system framing:** Ani
+- **Model-assisted proofs, writing & validation:** El (GPT-5.0) and Ren (Opus 4.5)
+
+---
+
+## References
+
+- Bresenham, J.E. (1965). "Algorithm for computer control of a digital plotter." *IBM Systems Journal*, 4(1), 25–30.
+- Berthé, V. & Tijdeman, R. (2002). "Balance properties of multi-dimensional words." *Theoretical Computer Science*, 273(1–2), 197–224.
+- Berstel, J., Lauve, A., Reutenauer, C. & Saliola, F. (2008). *Combinatorics on Words: Christoffel Words and Repetitions in Words.* CRM/AMS.
+
+---
+
+## License
+
+Apache-2.0
